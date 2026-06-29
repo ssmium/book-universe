@@ -844,11 +844,38 @@ function initThree() {
   animate();
 }
 
+// 별 모양 텍스처 생성 (canvas)
+function makeStarTexture(color, size=64) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const cx2 = size/2, cy2 = size/2, r = size/2;
+  const grd = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
+  grd.addColorStop(0, color + 'ff');
+  grd.addColorStop(0.15, color + 'cc');
+  grd.addColorStop(0.4, color + '55');
+  grd.addColorStop(1, color + '00');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+
+// 별자리 라벨 텍스처
+function makeLabelTexture(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,256,64);
+  ctx.font = 'bold 22px "Malgun Gothic", sans-serif';
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, 128, 40);
+  return new THREE.CanvasTexture(c);
+}
+
 function buildConstellation() {
-  // 기존 오브젝트 제거
-  constellationObjects.forEach(o => {
-    scene.remove(o.group);
-  });
+  constellationObjects.forEach(o => scene.remove(o.group));
   constellationObjects = [];
 
   const genres = [...new Set(books.map(b => b.genre))];
@@ -859,96 +886,105 @@ function buildConstellation() {
   genres.forEach((genre, gi) => {
     const cfg = GENRES[genre] || GENRES['기타'];
     const angle = gi * angleStep;
-    const radius = 30;
-    const cx = Math.cos(angle) * radius;
-    const cz = Math.sin(angle) * radius;
-    const cy = (Math.random() - 0.5) * 10;
+    const orbitR = 28 + (gi % 2) * 8;
+    const cx = Math.cos(angle) * orbitR;
+    const cz = Math.sin(angle) * orbitR;
+    const cy = (Math.random() - 0.5) * 14;
 
     const group = new THREE.Group();
     group.position.set(cx, cy, cz);
 
     const genreBooks = books.filter(b => b.genre === genre);
-    const authors = [...new Set(genreBooks.map(b => b.author))];
+    const allStarPositions = []; // 연결선용
 
-    // 별자리 중심 (큰 구체 = 별자리 레이블)
-    const centerGeo = new THREE.SphereGeometry(1.8, 16, 16);
-    const centerMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.9 });
-    const centerMesh = new THREE.Mesh(centerGeo, centerMat);
-    // 글로우 효과
-    const glowGeo = new THREE.SphereGeometry(2.6, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.15 });
-    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
-    group.add(glowMesh);
-    group.add(centerMesh);
-
-    // 행성 (작가별)
-    authors.forEach((author, ai) => {
-      const aAngle = (ai / authors.length) * Math.PI * 2;
-      const aRadius = 7 + ai * 0.5;
-      const px = Math.cos(aAngle) * aRadius;
-      const pz = Math.sin(aAngle) * aRadius;
-      const py = (Math.random() - 0.5) * 4;
-
-      // 연결선
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(px, py, pz)
-      ]);
-      const lineMat = new THREE.LineBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.25 });
-      group.add(new THREE.Line(lineGeo, lineMat));
-
-      // 행성
-      const authorBooks = genreBooks.filter(b => b.author === author);
-      const pSize = 0.7 + authorBooks.length * 0.15;
-      const pGeo = new THREE.SphereGeometry(pSize, 12, 12);
-      const pMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.8 });
-      const pMesh = new THREE.Mesh(pGeo, pMat);
-      pMesh.position.set(px, py, pz);
-      pMesh.userData = { type: 'planet', genre, author };
-      group.add(pMesh);
-
-      // 책 별 (작은 점)
-      authorBooks.forEach((book, bi) => {
-        const bAngle = (bi / authorBooks.length) * Math.PI * 2;
-        const bRadius = pSize + 2.5;
-        const bx = px + Math.cos(bAngle) * bRadius;
-        const bz = pz + Math.sin(bAngle) * bRadius;
-        const by = py + (Math.random() - 0.5) * 1.5;
-
-        const bSize = book.status === 'reserve' ? 0.18 : 0.28 + (book.rating || 0) * 0.04;
-        const bGeo = new THREE.SphereGeometry(bSize, 6, 6);
-        const bColor = book.status === 'reserve' ? 0xffd166 : cfg.color;
-        const bMat = new THREE.MeshBasicMaterial({ color: bColor, transparent: true, opacity: book.status === 'reserve' ? 0.5 : 0.9 });
-        const bMesh = new THREE.Mesh(bGeo, bMat);
-        bMesh.position.set(bx, by, bz);
-        bMesh.userData = { type: 'book', genre, author, bookId: book.id };
-        group.add(bMesh);
-      });
+    // 별 위치 계산 (책 한 권 = 별 하나)
+    genreBooks.forEach((book, bi) => {
+      const phi2 = Math.acos(-1 + (2 * bi) / Math.max(genreBooks.length, 1));
+      const theta2 = Math.sqrt(genreBooks.length * Math.PI) * phi2;
+      const sr = 4 + Math.floor(bi / 5) * 2.5;
+      const sx = sr * Math.sin(phi2) * Math.cos(theta2);
+      const sy = (Math.random() - 0.5) * 6;
+      const sz = sr * Math.sin(phi2) * Math.sin(theta2);
+      allStarPositions.push({ x: sx, y: sy, z: sz, book });
     });
 
-    centerMesh.userData = { type: 'constellation', genre };
-    glowMesh.userData = { type: 'constellation', genre };
+    // 별자리 연결선 (이웃한 별끼리)
+    for (let i = 0; i < allStarPositions.length - 1; i++) {
+      const a = allStarPositions[i];
+      const b2 = allStarPositions[i + 1];
+      const pts = [
+        new THREE.Vector3(a.x, a.y, a.z),
+        new THREE.Vector3(b2.x, b2.y, b2.z)
+      ];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: cfg.color, transparent: true, opacity: 0.35
+      });
+      group.add(new THREE.Line(lineGeo, lineMat));
+    }
+
+    // 별 스프라이트 (책마다)
+    allStarPositions.forEach(({ x, y, z, book }) => {
+      const isReserve = book.status === 'reserve';
+      const starColor = isReserve ? '#ffd166' : cfg.hex;
+      const tex = makeStarTexture(starColor);
+      const mat = new THREE.SpriteMaterial({
+        map: tex, transparent: true,
+        opacity: isReserve ? 0.55 : 0.92,
+        depthWrite: false
+      });
+      const sprite = new THREE.Sprite(mat);
+      const sz2 = isReserve ? 1.2 : 1.6 + (book.rating || 0) * 0.18;
+      sprite.scale.set(sz2, sz2, 1);
+      sprite.position.set(x, y, z);
+      sprite.userData = { type: 'star', genre, bookId: book.id, baseOpacity: mat.opacity, baseScale: sz2 };
+      group.add(sprite);
+    });
+
+    // 장르 라벨 스프라이트
+    const labelTex = makeLabelTexture(cfg.emoji + ' ' + genre, cfg.hex);
+    const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, opacity: 0.9, depthWrite: false });
+    const labelSprite = new THREE.Sprite(labelMat);
+    labelSprite.scale.set(12, 3, 1);
+    labelSprite.position.set(0, 7, 0);
+    labelSprite.userData = { type: 'label' };
+    group.add(labelSprite);
+
+    // 중심별 (장르 대표 — 가장 크고 밝은 별)
+    const centerTex = makeStarTexture(cfg.hex, 128);
+    const centerMat = new THREE.SpriteMaterial({ map: centerTex, transparent: true, opacity: 1, depthWrite: false });
+    const centerSprite = new THREE.Sprite(centerMat);
+    centerSprite.scale.set(3.5, 3.5, 1);
+    centerSprite.position.set(0, 0, 0);
+    centerSprite.userData = { type: 'constellation', genre };
+    group.add(centerSprite);
 
     scene.add(group);
-    constellationObjects.push({ group, genre, centerMesh });
+    constellationObjects.push({ group, genre, centerMesh: centerSprite });
   });
 }
 
 function animate() {
   animRAF = requestAnimationFrame(animate);
 
-  // 부드러운 카메라 이동
-  targetSpherical.theta += 0.0008; // 천천히 자동 회전
+  targetSpherical.theta += 0.0005;
   spherical.theta += (targetSpherical.theta - spherical.theta) * 0.05;
-  spherical.phi += (targetSpherical.phi - spherical.phi) * 0.05;
+  spherical.phi   += (targetSpherical.phi   - spherical.phi)   * 0.05;
   spherical.radius += (targetSpherical.radius - spherical.radius) * 0.05;
-
   updateCameraPos();
 
-  // 별자리 중심 펄스
+  // 별 반짝임
   const t = Date.now() * 0.001;
-  constellationObjects.forEach(o => {
-    o.centerMesh.material.opacity = 0.7 + Math.sin(t * 1.5 + o.genre.length) * 0.2;
+  constellationObjects.forEach((o, oi) => {
+    o.group.traverse(child => {
+      if (child.isSprite && child.userData.type === 'star') {
+        const flicker = 0.75 + Math.sin(t * 2.5 + child.position.x * 3.7 + oi) * 0.25;
+        child.material.opacity = child.userData.baseOpacity * flicker;
+      }
+      if (child.isSprite && child.userData.type === 'constellation') {
+        child.material.opacity = 0.8 + Math.sin(t * 1.2 + oi * 1.7) * 0.2;
+      }
+    });
   });
 
   renderer.render(scene, camera);
