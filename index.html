@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>나의 독서 우주 🌌</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: rgba(255,255,255,0.05);
+    --surface2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.1);
+    --text: #f0f4ff;
+    --text-muted: rgba(240,244,255,0.5);
+    --blue: #3182F6;
+    --blue-light: #5ba3ff;
+    --toss-radius: 16px;
+    --font: 'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── 3D 캔버스 ── */
+  #universe {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  /* ── 상단 바 ── */
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(180deg, rgba(10,14,26,0.95) 0%, transparent 100%);
+  }
+
+  .logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .logo span { color: var(--blue-light); }
+
+  #search-wrap {
+    flex: 1;
+    max-width: 400px;
+    position: relative;
+  }
+  #search {
+    width: 100%;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px 10px 40px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s, background .2s;
+  }
+  #search::placeholder { color: var(--text-muted); }
+  #search:focus { border-color: var(--blue); background: rgba(255,255,255,0.1); }
+  .search-icon {
+    position: absolute;
+    left: 13px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 15px;
+  }
+
+  #search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0; right: 0;
+    background: #151b2e;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: none;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .search-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  .search-item:last-child { border-bottom: none; }
+  .search-item:hover { background: var(--surface2); }
+  .search-item .si-title { font-size: 14px; font-weight: 500; }
+  .search-item .si-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  #add-btn {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .2s, transform .1s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #add-btn:hover { background: #1a6fe8; }
+  #add-btn:active { transform: scale(0.97); }
+
+  /* ── 범례 ── */
+  #legend {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 100;
+    background: rgba(10,14,26,0.85);
+    border: 1px solid var(--border);
+    border-radius: var(--toss-radius);
+    padding: 16px;
+    backdrop-filter: blur(12px);
+    min-width: 160px;
+  }
+  .legend-title { font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.5px; margin-bottom: 10px; text-transform: uppercase; }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; margin-bottom: 7px; cursor: pointer;
+    transition: opacity .2s;
+  }
+  .legend-item:hover { opacity: 0.7; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── 통계 ── */
+  #stats {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .stat-chip {
+    background: rgba(10,14,26,0.85);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    backdrop-filter: blur(12px);
+    text-align: right;
+  }
+  .stat-chip .val { font-size: 22px; font-weight: 700; color: var(--blue-light); }
+  .stat-chip .lbl { font-size: 11px; color: var(--text-muted); }
+
+  /* ── 힌트 ── */
+  #hint {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: rgba(10,14,26,0.7);
+    border-radius: 20px;
+    padding: 6px 14px;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+  }
+
+  /* ── 패널 (별자리/행성 클릭 시) ── */
+  #panel {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    width: 320px;
+    max-height: calc(100vh - 110px);
+    z-index: 100;
+    background: rgba(10,14,26,0.92);
+    border: 1px solid var(--border);
+    border-radius: var(--toss-radius);
+    backdrop-filter: blur(16px);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+  #panel.open { display: flex; }
+
+  .panel-header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .panel-genre-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .panel-title { font-size: 18px; font-weight: 700; }
+  .panel-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .panel-close {
+    background: var(--surface);
+    border: none;
+    color: var(--text-muted);
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  .panel-close:hover { background: var(--surface2); }
+
+  #panel-body { overflow-y: auto; padding: 12px 0; flex: 1; }
+  #panel-body::-webkit-scrollbar { width: 4px; }
+  #panel-body::-webkit-scrollbar-track { background: transparent; }
+  #panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* 작가 섹션 (행성) */
+  .author-section { margin-bottom: 4px; }
+  .author-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background .15s;
+    border-radius: 8px;
+    margin: 0 8px;
+  }
+  .author-header:hover { background: var(--surface2); }
+  .author-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .planet-icon { font-size: 16px; }
+  .author-count { font-size: 12px; color: var(--text-muted); }
+  .author-arrow { color: var(--text-muted); font-size: 12px; transition: transform .2s; }
+  .author-arrow.open { transform: rotate(180deg); }
+
+  .book-list { display: none; padding: 0 8px 8px; }
+  .book-list.open { display: block; }
+  .book-card {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    transition: background .15s;
+  }
+  .book-card:hover { background: var(--surface2); }
+  .book-card.reserve { opacity: 0.6; border-style: dashed; }
+  .book-info .book-title { font-size: 14px; font-weight: 500; }
+  .book-info .book-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .book-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .stars { font-size: 13px; letter-spacing: -1px; }
+  .reserve-badge {
+    font-size: 10px;
+    background: rgba(255,200,50,0.15);
+    color: #ffd166;
+    border: 1px solid rgba(255,200,50,0.3);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-weight: 600;
+  }
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 6px;
+    opacity: 0;
+    transition: opacity .15s, color .15s;
+  }
+  .book-card:hover .del-btn { opacity: 1; }
+  .del-btn:hover { color: #ff6b6b; }
+
+  /* ── 모달 ── */
+  #modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 300;
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+  }
+  #modal-bg.open { display: flex; }
+  #modal {
+    background: #111827;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    width: 360px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  }
+  .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 24px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 7px; font-weight: 500; }
+  .field input, .field select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s;
+    -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--blue); }
+  .field select option { background: #111827; }
+
+  .rating-wrap { display: flex; gap: 6px; }
+  .star-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    transition: transform .1s;
+    padding: 4px;
+    line-height: 1;
+  }
+  .star-btn:hover { transform: scale(1.2); }
+
+  .type-toggle { display: flex; gap: 8px; }
+  .type-btn {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    color: var(--text-muted);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .2s;
+    text-align: center;
+  }
+  .type-btn.active {
+    background: rgba(49,130,246,0.2);
+    border-color: var(--blue);
+    color: var(--blue-light);
+  }
+
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+  .btn-cancel {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text-muted);
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-cancel:hover { background: var(--surface2); }
+  .btn-save {
+    flex: 2;
+    background: var(--blue);
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    color: #fff;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-save:hover { background: #1a6fe8; }
+
+  /* ── 토스트 ── */
+  #toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1e293b;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 500;
+    opacity: 0;
+    transition: opacity .3s, transform .3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Supabase 설정 안내 ── */
+  #setup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,14,26,0.97);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .setup-box {
+    background: #111827;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+  }
+  .setup-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .setup-box p { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; }
+  .setup-box .field input { margin-bottom: 0; }
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #7dd3fc;
+    margin: 16px 0;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .btn-connect {
+    width: 100%;
+    background: var(--blue);
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    color: #fff;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: background .2s;
+  }
+  .btn-connect:hover { background: #1a6fe8; }
+
+  /* 스크롤바 숨김 */
+  html { overflow: hidden; }
+</style>
+</head>
+<body>
+
+<!-- Supabase 설정 -->
+<div id="setup-overlay">
+  <div class="setup-box">
+    <h2>🌌 독서 우주 연결하기</h2>
+    <p>Supabase 프로젝트를 연결해서 책 데이터를 저장해요.<br>아래 SQL을 Supabase SQL Editor에서 먼저 실행해주세요.</p>
+    <div class="code-block">CREATE TABLE books (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  author text NOT NULL,
+  genre text NOT NULL,
+  rating integer DEFAULT 0,
+  status text DEFAULT 'read',
+  created_at timestamptz DEFAULT now()
+);</div>
+    <div class="field">
+      <label>Supabase URL</label>
+      <input type="text" id="sb-url" placeholder="https://xxxx.supabase.co">
+    </div>
+    <div class="field" style="margin-top:12px">
+      <label>Supabase Anon Key</label>
+      <input type="text" id="sb-key" placeholder="eyJhbGci...">
+    </div>
+    <button class="btn-connect" id="connect-btn">연결하기 →</button>
+  </div>
+</div>
+
+<!-- 3D 캔버스 -->
+<canvas id="universe"></canvas>
+
+<!-- 상단 바 -->
+<div id="topbar">
+  <div class="logo" onclick="resetCamera()">나의 <span>독서 우주</span> 🌌</div>
+  <div id="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="search" placeholder="책 제목, 작가 검색..." oninput="onSearch(this.value)">
+    <div id="search-results"></div>
+  </div>
+  <button id="add-btn" >+ 책 등록</button>
+</div>
+
+<!-- 범례 -->
+<div id="legend">
+  <div class="legend-title">장르 별자리</div>
+  <div id="legend-items"></div>
+</div>
+
+<!-- 통계 -->
+<div id="stats">
+  <div class="stat-chip">
+    <div class="val" id="stat-total">0</div>
+    <div class="lbl">완독한 책</div>
+  </div>
+  <div class="stat-chip">
+    <div class="val" id="stat-reserve">0</div>
+    <div class="lbl">읽을 책</div>
+  </div>
+</div>
+
+<!-- 힌트 -->
+<div id="hint">드래그로 회전 · 스크롤로 줌 · 별자리 클릭</div>
+
+<!-- 사이드 패널 -->
+<div id="panel">
+  <div class="panel-header">
+    <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0">
+      <div class="panel-genre-dot" id="panel-dot"></div>
+      <div>
+        <div class="panel-title" id="panel-title"></div>
+        <div class="panel-sub" id="panel-sub"></div>
+      </div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div id="panel-body"></div>
+</div>
+
+<!-- 등록 모달 -->
+<div id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div class="modal-title">📖 책 등록</div>
+
+    <div class="field">
+      <label>상태</label>
+      <div class="type-toggle">
+        <button class="type-btn active" id="type-read" onclick="setType('read')">✅ 완독</button>
+        <button class="type-btn" id="type-reserve" onclick="setType('reserve')">⭐ 읽을 책</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>책 제목 *</label>
+      <input type="text" id="m-title" placeholder="제목을 입력하세요">
+    </div>
+    <div class="field">
+      <label>작가 *</label>
+      <input type="text" id="m-author" placeholder="작가명을 입력하세요">
+    </div>
+    <div class="field">
+      <label>장르 (AI가 자동 분류해요)</label>
+      <select id="m-genre">
+        <option value="auto">🤖 자동 분류</option>
+        <option value="인문학">🏛️ 인문학</option>
+        <option value="문학">📚 문학</option>
+        <option value="자기계발">🌱 자기계발</option>
+        <option value="경제·경영">💼 경제·경영</option>
+        <option value="과학·기술">🔬 과학·기술</option>
+        <option value="역사">🏺 역사</option>
+        <option value="예술·문화">🎨 예술·문화</option>
+        <option value="에세이">✍️ 에세이</option>
+        <option value="기타">🌐 기타</option>
+      </select>
+    </div>
+    <div class="field" id="rating-field">
+      <label>만족도</label>
+      <div class="rating-wrap" id="stars">
+        <button class="star-btn" onclick="setRating(1)">☆</button>
+        <button class="star-btn" onclick="setRating(2)">☆</button>
+        <button class="star-btn" onclick="setRating(3)">☆</button>
+        <button class="star-btn" onclick="setRating(4)">☆</button>
+        <button class="star-btn" onclick="setRating(5)">☆</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" onclick="saveBook()">등록하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div id="toast"></div>
+
+<script>
+// ── 장르 설정 ──────────────────────────────────────────
+const GENRES = {
+  '인문학':    { color: 0x7C6FF7, hex: '#7C6FF7', emoji: '🏛️', icon: '🏛' },
+  '문학':      { color: 0xFF7BAC, hex: '#FF7BAC', emoji: '📚', icon: '📚' },
+  '자기계발':  { color: 0x4ADE80, hex: '#4ADE80', emoji: '🌱', icon: '🌱' },
+  '경제·경영': { color: 0xFFB347, hex: '#FFB347', emoji: '💼', icon: '💼' },
+  '과학·기술': { color: 0x38BDF8, hex: '#38BDF8', emoji: '🔬', icon: '🔬' },
+  '역사':      { color: 0xFB923C, hex: '#FB923C', emoji: '🏺', icon: '🏺' },
+  '예술·문화': { color: 0xE879F9, hex: '#E879F9', emoji: '🎨', icon: '🎨' },
+  '에세이':    { color: 0xFBD144, hex: '#FBD144', emoji: '✍️', icon: '✍' },
+  '기타':      { color: 0x94A3B8, hex: '#94A3B8', emoji: '🌐', icon: '🌐' },
+};
+
+// 자동 분류 키워드
+function autoClassify(title, author) {
+  const t = (title + author).toLowerCase();
+  if (/소설|시집|단편|장편|fiction|novel|詩|이야기/.test(t)) return '문학';
+  if (/역사|왕조|전쟁|조선|고려|세계사|history/.test(t)) return '역사';
+  if (/경제|경영|투자|주식|비즈|마케팅|스타트업|창업/.test(t)) return '경제·경영';
+  if (/철학|인문|사회|심리학|인문학|사상/.test(t)) return '인문학';
+  if (/과학|기술|ai|수학|물리|화학|it|coding|프로그래밍/.test(t)) return '과학·기술';
+  if (/자기계발|성공|습관|동기|자기/.test(t)) return '자기계발';
+  if (/에세이|일기|여행기|산문|수필/.test(t)) return '에세이';
+  if (/미술|음악|영화|디자인|예술|문화/.test(t)) return '예술·문화';
+  return '기타';
+}
+
+// ── 상태 ───────────────────────────────────────────────
+let supabase = null;
+let books = [];
+let currentRating = 0;
+let currentType = 'read';
+let scene, camera, renderer, raycaster, mouse;
+let constellationObjects = []; // {mesh, genre, books}
+let isDragging = false, prevMouse = {x:0,y:0};
+let spherical = {theta: 0, phi: Math.PI/2.5, radius: 80};
+let targetSpherical = {theta: 0, phi: Math.PI/2.5, radius: 80};
+let animRAF = null;
+
+// ── Supabase 연결 ──────────────────────────────────────
+async function connectSupabase() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { showToast('URL과 Key를 입력해주세요'); return; }
+  try {
+    supabase = window.supabase.createClient(url, key);
+    const { error } = await supabase.from('books').select('id').limit(1);
+    if (error) throw error;
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    document.getElementById('setup-overlay').style.display = 'none';
+    await loadBooks();
+    initThree();
+    showToast('🌌 독서 우주에 연결됐어요!');
+  } catch(e) {
+    showToast('연결 실패: ' + e.message);
+  }
+}
+
+// ── 자동 재연결 ────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('connect-btn').addEventListener('click', connectSupabase);
+  document.getElementById('add-btn').addEventListener('click', openModal);
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (url && key) {
+    document.getElementById('sb-url').value = url;
+    document.getElementById('sb-key').value = key;
+    await connectSupabase();
+  }
+});
+
+// ── 데이터 ─────────────────────────────────────────────
+async function loadBooks() {
+  const { data, error } = await supabase.from('books').select('*').order('created_at', {ascending:true});
+  if (error) { showToast('로드 실패: ' + error.message); return; }
+  books = data || [];
+  renderAll();
+}
+
+async function saveBook() {
+  const title = document.getElementById('m-title').value.trim();
+  const author = document.getElementById('m-author').value.trim();
+  let genre = document.getElementById('m-genre').value;
+  if (!title || !author) { showToast('제목과 작가를 입력해주세요'); return; }
+  if (genre === 'auto') genre = autoClassify(title, author);
+
+  const { data, error } = await supabase.from('books').insert([{
+    title, author, genre,
+    rating: currentType === 'read' ? currentRating : 0,
+    status: currentType
+  }]).select();
+  if (error) { showToast('저장 실패: ' + error.message); return; }
+  books.push(data[0]);
+  renderAll();
+  closeModal();
+  showToast(`📖 "${title}" 등록 완료!`);
+}
+
+async function deleteBook(id) {
+  const { error } = await supabase.from('books').delete().eq('id', id);
+  if (error) { showToast('삭제 실패'); return; }
+  books = books.filter(b => b.id !== id);
+  renderAll();
+  // 패널 새로고침
+  const panel = document.getElementById('panel');
+  if (panel.dataset.genre) openPanel(panel.dataset.genre);
+}
+
+// ── 렌더링 ─────────────────────────────────────────────
+function renderAll() {
+  updateStats();
+  buildLegend();
+  if (renderer) buildConstellation();
+}
+
+function updateStats() {
+  const read = books.filter(b => b.status === 'read').length;
+  const reserve = books.filter(b => b.status === 'reserve').length;
+  document.getElementById('stat-total').textContent = read;
+  document.getElementById('stat-reserve').textContent = reserve;
+}
+
+function buildLegend() {
+  const genres = [...new Set(books.map(b => b.genre))];
+  const el = document.getElementById('legend-items');
+  el.innerHTML = '';
+  if (genres.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">아직 등록된 책이 없어요</div>';
+    return;
+  }
+  genres.forEach(g => {
+    const cfg = GENRES[g] || GENRES['기타'];
+    const cnt = books.filter(b => b.genre === g).length;
+    el.innerHTML += `
+      <div class="legend-item" onclick="openPanel('${g}')">
+        <div class="legend-dot" style="background:${cfg.hex}"></div>
+        <span>${cfg.emoji} ${g}</span>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:auto">${cnt}</span>
+      </div>`;
+  });
+}
+
+// ── Three.js ───────────────────────────────────────────
+function initThree() {
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+  updateCameraPos();
+
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('universe'), antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // 배경 별 파티클
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 2000;
+  const positions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount * 3; i++) positions[i] = (Math.random() - 0.5) * 600;
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, transparent: true, opacity: 0.6 });
+  scene.add(new THREE.Points(starGeo, starMat));
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  buildConstellation();
+  addEvents();
+  animate();
+}
+
+function buildConstellation() {
+  // 기존 오브젝트 제거
+  constellationObjects.forEach(o => {
+    scene.remove(o.group);
+  });
+  constellationObjects = [];
+
+  const genres = [...new Set(books.map(b => b.genre))];
+  if (genres.length === 0) return;
+
+  const angleStep = (Math.PI * 2) / genres.length;
+
+  genres.forEach((genre, gi) => {
+    const cfg = GENRES[genre] || GENRES['기타'];
+    const angle = gi * angleStep;
+    const radius = 30;
+    const cx = Math.cos(angle) * radius;
+    const cz = Math.sin(angle) * radius;
+    const cy = (Math.random() - 0.5) * 10;
+
+    const group = new THREE.Group();
+    group.position.set(cx, cy, cz);
+
+    const genreBooks = books.filter(b => b.genre === genre);
+    const authors = [...new Set(genreBooks.map(b => b.author))];
+
+    // 별자리 중심 (큰 구체 = 별자리 레이블)
+    const centerGeo = new THREE.SphereGeometry(1.8, 16, 16);
+    const centerMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.9 });
+    const centerMesh = new THREE.Mesh(centerGeo, centerMat);
+    // 글로우 효과
+    const glowGeo = new THREE.SphereGeometry(2.6, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.15 });
+    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    group.add(glowMesh);
+    group.add(centerMesh);
+
+    // 행성 (작가별)
+    authors.forEach((author, ai) => {
+      const aAngle = (ai / authors.length) * Math.PI * 2;
+      const aRadius = 7 + ai * 0.5;
+      const px = Math.cos(aAngle) * aRadius;
+      const pz = Math.sin(aAngle) * aRadius;
+      const py = (Math.random() - 0.5) * 4;
+
+      // 연결선
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(px, py, pz)
+      ]);
+      const lineMat = new THREE.LineBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.25 });
+      group.add(new THREE.Line(lineGeo, lineMat));
+
+      // 행성
+      const authorBooks = genreBooks.filter(b => b.author === author);
+      const pSize = 0.7 + authorBooks.length * 0.15;
+      const pGeo = new THREE.SphereGeometry(pSize, 12, 12);
+      const pMat = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.8 });
+      const pMesh = new THREE.Mesh(pGeo, pMat);
+      pMesh.position.set(px, py, pz);
+      pMesh.userData = { type: 'planet', genre, author };
+      group.add(pMesh);
+
+      // 책 별 (작은 점)
+      authorBooks.forEach((book, bi) => {
+        const bAngle = (bi / authorBooks.length) * Math.PI * 2;
+        const bRadius = pSize + 2.5;
+        const bx = px + Math.cos(bAngle) * bRadius;
+        const bz = pz + Math.sin(bAngle) * bRadius;
+        const by = py + (Math.random() - 0.5) * 1.5;
+
+        const bSize = book.status === 'reserve' ? 0.18 : 0.28 + (book.rating || 0) * 0.04;
+        const bGeo = new THREE.SphereGeometry(bSize, 6, 6);
+        const bColor = book.status === 'reserve' ? 0xffd166 : cfg.color;
+        const bMat = new THREE.MeshBasicMaterial({ color: bColor, transparent: true, opacity: book.status === 'reserve' ? 0.5 : 0.9 });
+        const bMesh = new THREE.Mesh(bGeo, bMat);
+        bMesh.position.set(bx, by, bz);
+        bMesh.userData = { type: 'book', genre, author, bookId: book.id };
+        group.add(bMesh);
+      });
+    });
+
+    centerMesh.userData = { type: 'constellation', genre };
+    glowMesh.userData = { type: 'constellation', genre };
+
+    scene.add(group);
+    constellationObjects.push({ group, genre, centerMesh });
+  });
+}
+
+function animate() {
+  animRAF = requestAnimationFrame(animate);
+
+  // 부드러운 카메라 이동
+  targetSpherical.theta += 0.0008; // 천천히 자동 회전
+  spherical.theta += (targetSpherical.theta - spherical.theta) * 0.05;
+  spherical.phi += (targetSpherical.phi - spherical.phi) * 0.05;
+  spherical.radius += (targetSpherical.radius - spherical.radius) * 0.05;
+
+  updateCameraPos();
+
+  // 별자리 중심 펄스
+  const t = Date.now() * 0.001;
+  constellationObjects.forEach(o => {
+    o.centerMesh.material.opacity = 0.7 + Math.sin(t * 1.5 + o.genre.length) * 0.2;
+  });
+
+  renderer.render(scene, camera);
+}
+
+function updateCameraPos() {
+  if (!camera) return;
+  const { theta, phi, radius } = spherical;
+  camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
+  camera.position.y = radius * Math.cos(phi);
+  camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+  camera.lookAt(0, 0, 0);
+}
+
+function addEvents() {
+  const canvas = renderer.domElement;
+  let mouseDownPos = {x:0, y:0};
+
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    prevMouse = {x: e.clientX, y: e.clientY};
+    mouseDownPos = {x: e.clientX, y: e.clientY};
+    targetSpherical.theta = spherical.theta; // 자동 회전 정지
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    targetSpherical.theta -= dx * 0.005;
+    targetSpherical.phi = Math.max(0.3, Math.min(Math.PI - 0.3, targetSpherical.phi + dy * 0.005));
+    prevMouse = {x: e.clientX, y: e.clientY};
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    isDragging = false;
+    const dist = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y);
+    if (dist < 5) handleClick(e);
+  });
+
+  canvas.addEventListener('wheel', e => {
+    targetSpherical.radius = Math.max(20, Math.min(150, targetSpherical.radius + e.deltaY * 0.1));
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+function handleClick(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const allMeshes = [];
+  constellationObjects.forEach(o => {
+    o.group.traverse(child => { if (child.isMesh) allMeshes.push(child); });
+  });
+
+  const hits = raycaster.intersectObjects(allMeshes);
+  if (hits.length > 0) {
+    const obj = hits[0].object;
+    if (obj.userData.genre) openPanel(obj.userData.genre);
+  }
+}
+
+function resetCamera() {
+  targetSpherical = {theta: 0, phi: Math.PI/2.5, radius: 80};
+}
+
+// ── 패널 ───────────────────────────────────────────────
+function openPanel(genre) {
+  const panel = document.getElementById('panel');
+  panel.dataset.genre = genre;
+  const cfg = GENRES[genre] || GENRES['기타'];
+  const genreBooks = books.filter(b => b.genre === genre);
+
+  document.getElementById('panel-dot').style.background = cfg.hex;
+  document.getElementById('panel-title').textContent = `${cfg.emoji} ${genre}`;
+  document.getElementById('panel-sub').textContent = `${genreBooks.length}권 · ${[...new Set(genreBooks.map(b=>b.author))].length}명의 작가`;
+
+  const authors = [...new Set(genreBooks.map(b => b.author))];
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+
+  authors.forEach((author, ai) => {
+    const authorBooks = genreBooks.filter(b => b.author === author);
+    const planets = ['🪐','⚡','🌙','💫','🔴','🟣','🟤','⚪'];
+    const planet = planets[ai % planets.length];
+
+    const section = document.createElement('div');
+    section.className = 'author-section';
+
+    const header = document.createElement('div');
+    header.className = 'author-header';
+    header.innerHTML = `
+      <div class="author-name"><span class="planet-icon">${planet}</span>${author}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="author-count">${authorBooks.length}권</span>
+        <span class="author-arrow" id="arrow-${ai}">▼</span>
+      </div>`;
+    header.onclick = () => toggleAuthor(ai);
+    section.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'book-list';
+    list.id = `book-list-${ai}`;
+
+    authorBooks.forEach(book => {
+      const stars = book.status === 'reserve' ? '' : '★'.repeat(book.rating || 0) + '☆'.repeat(5 - (book.rating||0));
+      list.innerHTML += `
+        <div class="book-card ${book.status === 'reserve' ? 'reserve' : ''}">
+          <div class="book-info">
+            <div class="book-title">${book.title}</div>
+            <div class="book-meta">${book.status === 'reserve' ? '읽을 예정' : (book.rating ? `만족도 ${book.rating}/5` : '만족도 미입력')}</div>
+          </div>
+          <div class="book-right">
+            ${book.status === 'reserve' ? '<span class="reserve-badge">예비</span>' : `<span class="stars">${stars}</span>`}
+            <button class="del-btn" onclick="deleteBook('${book.id}')">🗑</button>
+          </div>
+        </div>`;
+    });
+
+    section.appendChild(list);
+    body.appendChild(section);
+
+    // 첫 번째 작가는 자동 열기
+    if (ai === 0) toggleAuthor(0);
+  });
+
+  panel.classList.add('open');
+}
+
+function toggleAuthor(ai) {
+  const list = document.getElementById(`book-list-${ai}`);
+  const arrow = document.getElementById(`arrow-${ai}`);
+  if (!list) return;
+  list.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
+
+function closePanel() {
+  const panel = document.getElementById('panel');
+  panel.classList.remove('open');
+  delete panel.dataset.genre;
+}
+
+// ── 검색 ───────────────────────────────────────────────
+function onSearch(val) {
+  const wrap = document.getElementById('search-results');
+  if (!val.trim()) { wrap.style.display = 'none'; return; }
+  const results = books.filter(b =>
+    b.title.includes(val) || b.author.includes(val)
+  ).slice(0, 6);
+  if (results.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.innerHTML = results.map(b => `
+    <div class="search-item" onclick="searchClick('${b.genre}');document.getElementById('search').value='';document.getElementById('search-results').style.display='none'">
+      <div class="si-title">${b.title}</div>
+      <div class="si-meta">${b.author} · ${b.genre} ${b.status==='reserve'?'· 예비':''}</div>
+    </div>`).join('');
+  wrap.style.display = 'block';
+}
+
+function searchClick(genre) { openPanel(genre); }
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('search-wrap').contains(e.target)) {
+    document.getElementById('search-results').style.display = 'none';
+  }
+});
+
+// ── 모달 ───────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modal-bg').classList.add('open');
+  document.getElementById('m-title').value = '';
+  document.getElementById('m-author').value = '';
+  document.getElementById('m-genre').value = 'auto';
+  setRating(0);
+  setType('read');
+}
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+}
+function setType(t) {
+  currentType = t;
+  document.getElementById('type-read').classList.toggle('active', t==='read');
+  document.getElementById('type-reserve').classList.toggle('active', t==='reserve');
+  document.getElementById('rating-field').style.opacity = t === 'reserve' ? '0.3' : '1';
+  document.getElementById('rating-field').style.pointerEvents = t === 'reserve' ? 'none' : 'auto';
+}
+function setRating(n) {
+  currentRating = n;
+  const btns = document.querySelectorAll('.star-btn');
+  btns.forEach((b, i) => b.textContent = i < n ? '★' : '☆');
+}
+
+// ── 토스트 ─────────────────────────────────────────────
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
