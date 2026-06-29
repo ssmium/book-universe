@@ -501,7 +501,7 @@
       <label>Supabase Anon Key</label>
       <input type="text" id="sb-key" placeholder="eyJhbGci...">
     </div>
-    <button class="btn-connect" id="connect-btn">연결하기 →</button>
+    <button class="btn-connect" id="connect-btn" onclick="connectSupabase()">연결하기 →</button>
   </div>
 </div>
 
@@ -653,7 +653,7 @@ let targetSpherical = {theta: 0, phi: Math.PI/2.5, radius: 80};
 let animRAF = null;
 
 // ── Supabase 연결 ──────────────────────────────────────
-async function connectSupabase() {
+window.connectSupabase = async function connectSupabase() {
   const url = document.getElementById('sb-url').value.trim();
   const key = document.getElementById('sb-key').value.trim();
   if (!url || !key) { showToast('URL과 Key를 입력해주세요'); return; }
@@ -674,7 +674,6 @@ async function connectSupabase() {
 
 // ── 자동 재연결 ────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
-  document.getElementById('connect-btn').addEventListener('click', connectSupabase);
   document.getElementById('add-btn').addEventListener('click', openModal);
   const url = localStorage.getItem('sb_url');
   const key = localStorage.getItem('sb_key');
