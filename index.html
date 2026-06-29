@@ -639,6 +639,7 @@
     <div class="field">
       <label>장르 (AI가 자동 분류해요)</label>
       <select id="m-genre">
+        <option value="">— 장르 선택 —</option>
         <option value="auto">🤖 자동 분류</option>
         <option value="인문학">🏛️ 인문학</option>
         <option value="문학">📚 문학</option>
@@ -689,14 +690,14 @@ const GENRES = {
 // 자동 분류 키워드
 function autoClassify(title, author) {
   const t = (title + author).toLowerCase();
-  if (/소설|시집|단편|장편|fiction|novel|詩|이야기/.test(t)) return '문학';
-  if (/역사|왕조|전쟁|조선|고려|세계사|history/.test(t)) return '역사';
-  if (/경제|경영|투자|주식|비즈|마케팅|스타트업|창업/.test(t)) return '경제·경영';
-  if (/철학|인문|사회|심리학|인문학|사상/.test(t)) return '인문학';
-  if (/과학|기술|ai|수학|물리|화학|it|coding|프로그래밍/.test(t)) return '과학·기술';
-  if (/자기계발|성공|습관|동기|자기/.test(t)) return '자기계발';
-  if (/에세이|일기|여행기|산문|수필/.test(t)) return '에세이';
-  if (/미술|음악|영화|디자인|예술|문화/.test(t)) return '예술·문화';
+  if (/소설|시집|단편|장편|fiction|novel|詩|이야기|SF|판타지|추리|로맨스|동화/.test(t)) return '문학';
+  if (/에세이|일기|여행기|산문|수필|일상|생각|기록|감상|고백|편지|독백|잡문|회고|노트|메모|다이어리/.test(t)) return '에세이';
+  if (/역사|왕조|전쟁|조선|고려|세계사|history|왕|황제|제국|혁명|근대|고대|중세/.test(t)) return '역사';
+  if (/경제|경영|투자|주식|비즈|마케팅|스타트업|창업|돈|부자|재테크|회계|금융/.test(t)) return '경제·경영';
+  if (/철학|인문|사회|심리학|인문학|사상|윤리|논리|존재|의식|정치|사회학/.test(t)) return '인문학';
+  if (/과학|기술|ai|수학|물리|화학|it|coding|프로그래밍|우주|생물|유전|뇌|의학/.test(t)) return '과학·기술';
+  if (/자기계발|성공|습관|동기|자기|목표|멘탈|집중|시간관리|생산성/.test(t)) return '자기계발';
+  if (/미술|음악|영화|디자인|예술|문화|사진|건축|패션|드라마|공연/.test(t)) return '예술·문화';
   return '기타';
 }
 
