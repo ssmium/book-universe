@@ -641,7 +641,7 @@ function autoClassify(title, author) {
 }
 
 // ── 상태 ───────────────────────────────────────────────
-let supabase = null;
+let sbClient = null;
 let books = [];
 let currentRating = 0;
 let currentType = 'read';
@@ -658,8 +658,8 @@ async function connectSupabase() {
   const key = document.getElementById('sb-key').value.trim();
   if (!url || !key) { showToast('URL과 Key를 입력해주세요'); return; }
   try {
-    supabase = window.supabase.createClient(url, key);
-    const { error } = await supabase.from('books').select('id').limit(1);
+    sbClient = window.supabase.createClient(url, key);
+    const { error } = await sbClient.from('books').select('id').limit(1);
     if (error) throw error;
     localStorage.setItem('sb_url', url);
     localStorage.setItem('sb_key', key);
@@ -687,7 +687,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // ── 데이터 ─────────────────────────────────────────────
 async function loadBooks() {
-  const { data, error } = await supabase.from('books').select('*').order('created_at', {ascending:true});
+  const { data, error } = await sbClient.from('books').select('*').order('created_at', {ascending:true});
   if (error) { showToast('로드 실패: ' + error.message); return; }
   books = data || [];
   renderAll();
@@ -700,7 +700,7 @@ async function saveBook() {
   if (!title || !author) { showToast('제목과 작가를 입력해주세요'); return; }
   if (genre === 'auto') genre = autoClassify(title, author);
 
-  const { data, error } = await supabase.from('books').insert([{
+  const { data, error } = await sbClient.from('books').insert([{
     title, author, genre,
     rating: currentType === 'read' ? currentRating : 0,
     status: currentType
@@ -713,7 +713,7 @@ async function saveBook() {
 }
 
 async function deleteBook(id) {
-  const { error } = await supabase.from('books').delete().eq('id', id);
+  const { error } = await sbClient.from('books').delete().eq('id', id);
   if (error) { showToast('삭제 실패'); return; }
   books = books.filter(b => b.id !== id);
   renderAll();
